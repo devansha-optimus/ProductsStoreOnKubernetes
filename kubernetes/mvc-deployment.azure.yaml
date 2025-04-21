@@ -31,4 +31,4 @@ spec:
               name: mssql-connection-configmap
               key: db-connection-string
       imagePullSecrets:
-      - name: acr-auth
+      - name: acr-authdd

@@ -27,6 +27,8 @@ spec:
           requests:
             cpu: 100m
             memory: "50Mi"
+        imagePullSecrets:
+        - name: acr-auth
         env:
           - name: ConnectionStrings__ProductsContext
             valueFrom:

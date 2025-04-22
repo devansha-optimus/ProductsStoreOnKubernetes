@@ -24,7 +24,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build . -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.tag }}
+        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.tag }}
         docker tag ${{ steps.vars.outputs.tag }} ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes:${{ steps.vars.outputs.tag }}
 
     - name: Push Docker image to ACR

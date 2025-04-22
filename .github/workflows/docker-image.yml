@@ -12,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
+      repo: ${{ steps.vars.outputs.repo }}
+      name: ${{ steps.vars.outputs.name }}
       tag: ${{ steps.vars.outputs.tag }}
-      image: ${{ steps.vars.outputs.image }}
 
     steps:
     - name: Checkout code
@@ -22,20 +23,23 @@ jobs:
     - name: Log in to ACR
       run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
 
-    - name: Set full image name
+    - name: Set image values
       id: vars
       run: |
         TAG=$(date +%s)
-        IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/my-image-name:$TAG
+        REPO=${{ secrets.ACR_LOGIN_SERVER }}
+        NAME=devansha-optimus/productsstoreonkubernetes/my-image-name
+        echo "repo=$REPO" >> $GITHUB_OUTPUT
+        echo "name=$NAME" >> $GITHUB_OUTPUT
         echo "tag=$TAG" >> $GITHUB_OUTPUT
-        echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
     - name: Build Docker image
       run: |
-        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.image }}
+        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.repo }}/${{ steps.vars.outputs.name }}:${{ steps.vars.outputs.tag }}
 
     - name: Push Docker image to ACR
-      run: docker push ${{ steps.vars.outputs.image }}
+      run: |
+        docker push ${{ steps.vars.outputs.repo }}/${{ steps.vars.outputs.name }}:${{ steps.vars.outputs.tag }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -50,10 +54,12 @@ jobs:
         mkdir -p $HOME/.kube
         echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > $HOME/.kube/config
 
-    - name: Replace image in deployment file
+    - name: Replace image placeholders in deployment file
       run: |
-        IMAGE="${{ needs.build.outputs.image }}"
-        sed "s|__IMAGE__|$IMAGE|" kubernetes/mvc-deployment.azure.yaml > kubernetes/mvc-deployment.final.yaml
+        sed -e "s|__DOCKER_REPOSITORY__|${{ needs.build.outputs.repo }}|" \
+            -e "s|__IMAGE_NAME__|${{ needs.build.outputs.name }}|" \
+            -e "s|__IMAGE_TAG__|${{ needs.build.outputs.tag }}|" \
+            kubernetes/mvc-deployment.azure.yaml > kubernetes/mvc-deployment.final.yaml
 
     - name: Deploy all Kubernetes manifests
       run: |

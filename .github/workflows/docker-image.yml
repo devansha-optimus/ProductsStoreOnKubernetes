@@ -13,6 +13,7 @@ jobs:
 
     outputs:
       tag: ${{ steps.vars.outputs.tag }}
+      image: ${{ steps.vars.outputs.image }}
 
     steps:
     - name: Checkout code
@@ -21,17 +22,20 @@ jobs:
     - name: Log in to ACR
       run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
 
-    - name: Set image tag
+    - name: Set full image name
       id: vars
-      run: echo "tag=my-image-name:$(date +%s)" >> $GITHUB_OUTPUT
+      run: |
+        TAG=my-image-name:$(date +%s)
+        IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes:$TAG
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
     - name: Build Docker image
       run: |
-        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.tag }}
-        docker tag ${{ steps.vars.outputs.tag }} ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/${{ steps.vars.outputs.tag }}
+        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.image }}
 
     - name: Push Docker image to ACR
-      run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/${{ steps.vars.outputs.tag }}
+      run: docker push ${{ steps.vars.outputs.image }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -48,7 +52,7 @@ jobs:
 
     - name: Replace image in deployment file
       run: |
-        IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/${{ needs.build.outputs.tag }}"
+        IMAGE="${{ needs.build.outputs.image }}"
         sed "s|__IMAGE__|$IMAGE|" kubernetes/mvc-deployment.azure.yaml > kubernetes/mvc-deployment.final.yaml
 
     - name: Deploy all Kubernetes manifests

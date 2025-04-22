@@ -25,8 +25,8 @@ jobs:
     - name: Set full image name
       id: vars
       run: |
-        TAG=my-image-name:$(date +%s)
-        IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes:$TAG
+        TAG=$(date +%s)
+        IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/my-image-name:$TAG
         echo "tag=$TAG" >> $GITHUB_OUTPUT
         echo "image=$IMAGE" >> $GITHUB_OUTPUT
 

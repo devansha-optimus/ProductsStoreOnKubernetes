@@ -1,34 +1,67 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mvc-deployment
-spec:
-  selector:
-    matchLabels:
-      app: mvc
-  replicas: 3
-  template:
-    metadata:
-      labels:
-        app: mvc
-    spec:
-      containers:
-      - name: mvc
-        image: __IMAGE__
-        ports:
-        - containerPort: 80
-        resources:
-          limits:
-            cpu: 300m
-            memory: "100Mi"
-          requests:
-            cpu: 100m
-            memory: "50Mi"
-        env:
-        - name: ConnectionStrings__ProductsContext
-          valueFrom:
-            configMapKeyRef:
-              name: mssql-connection-configmap
-              key: db-connection-string
-      imagePullSecrets:
-      - name: acr-authdd
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      image: ${{ steps.vars.outputs.image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to ACR
+        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+
+      - name: Set image tag
+        id: vars
+        run: |
+          TAG=$(date +%s)
+          IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/my-image-name:$TAG
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.image }}
+
+      - name: Push Docker image to ACR
+        run: docker push ${{ steps.vars.outputs.image }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > $HOME/.kube/config
+
+      - name: Replace image in deployment file
+        run: |
+          IMAGE="${{ needs.build.outputs.image }}"
+          sed "s|__IMAGE__|$IMAGE|" kubernetes/mvc-deployment.azure.yaml > kubernetes/mvc-deployment.final.yaml
+
+      - name: Show final deployment file
+        run: cat kubernetes/mvc-deployment.final.yaml
+
+      - name: Deploy all Kubernetes manifests
+        run: |
+          kubectl apply -f kubernetes/mssql-configmap.yaml
+          kubectl apply -f kubernetes/mssql-secret.yaml
+          kubectl apply -f kubernetes/mssql-pv.azure.yaml
+          kubectl apply -f kubernetes/mssql-deployment.yaml
+          kubectl apply -f kubernetes/mvc-deployment.final.yaml

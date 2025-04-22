@@ -1,31 +1,28 @@
-name: Docker Image CI
+deploy:
+  runs-on: ubuntu-latest
+  needs: build
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+  steps:
+  - name: Checkout code
+    uses: actions/checkout@v4
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+  - name: Set up kubeconfig
+    run: |
+      mkdir -p $HOME/.kube
+      echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > $HOME/.kube/config
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  - name: Prepare image tag
+    id: image
+    run: echo "IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/${{ needs.build.outputs.tag }}" >> $GITHUB_ENV
 
-    - name: Log in to ACR
-      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+  - name: Replace image in deployment file
+    run: |
+      sed "s|__IMAGE__|${IMAGE}|" kubernetes/mvc-deployment.azure.yaml > kubernetes/mvc-deployment.final.yaml
 
-    - name: Set image tag
-      id: vars
-      run: echo "tag=my-image-name:$(date +%s)" >> $GITHUB_OUTPUT
-
-    - name: Build Docker image
-      run: |
-        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.tag }}
-        docker tag ${{ steps.vars.outputs.tag }} ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/${{ steps.vars.outputs.tag }}
-
-    - name: Push Docker image to ACR
-      run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes/${{ steps.vars.outputs.tag }}
+  - name: Deploy all Kubernetes manifests
+    run: |
+      kubectl apply -f kubernetes/mssql-configmap.yaml
+      kubectl apply -f kubernetes/mssql-secret.yaml
+      kubectl apply -f kubernetes/mssql-pv.azure.yaml
+      kubectl apply -f kubernetes/mssql-deployment.yaml
+      kubectl apply -f kubernetes/mvc-deployment.final.yaml

@@ -1,11 +1,9 @@
-name: Docker Image CI
+name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   build:
@@ -13,19 +11,22 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
-    - name: Log in to ACR
-      run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
-
-    - name: Set image tag
-      id: vars
-      run: echo "tag=my-image-name:$(date +%s)" >> $GITHUB_OUTPUT
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Build Docker image
       run: |
-        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.tag }}
-        docker tag ${{ steps.vars.outputs.tag }} ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes:${{ steps.vars.outputs.tag }}
+        IMAGE_NAME=devansha-optimus/productsstoreonkubernetes/my-image-name
+        IMAGE_TAG=$(date +%s)
+        docker build MvcApp -f MvcApp/Dockerfile -t $IMAGE_NAME:$IMAGE_TAG
 
-    - name: Push Docker image to ACR
-      run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/devansha-optimus/productsstoreonkubernetes:${{ steps.vars.outputs.tag }}
+    - name: Push Docker image
+      run: |
+        IMAGE_NAME=devansha-optimus/productsstoreonkubernetes/my-image-name
+        IMAGE_TAG=$(date +%s)
+        docker push $IMAGE_NAME:$IMAGE_TAG

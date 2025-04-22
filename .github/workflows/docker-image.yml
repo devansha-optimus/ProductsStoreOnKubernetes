@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      repo: ${{ steps.vars.outputs.repo }}
       name: ${{ steps.vars.outputs.name }}
       tag: ${{ steps.vars.outputs.tag }}
 
@@ -27,19 +26,17 @@ jobs:
       id: vars
       run: |
         TAG=$(date +%s)
-        REPO=${{ secrets.ACR_LOGIN_SERVER }}
         NAME=devansha-optimus/productsstoreonkubernetes/my-image-name
-        echo "repo=$REPO" >> $GITHUB_OUTPUT
         echo "name=$NAME" >> $GITHUB_OUTPUT
         echo "tag=$TAG" >> $GITHUB_OUTPUT
 
     - name: Build Docker image
       run: |
-        docker build MvcApp -f MvcApp/Dockerfile -t ${{ steps.vars.outputs.repo }}/${{ steps.vars.outputs.name }}:${{ steps.vars.outputs.tag }}
+        docker build MvcApp -f MvcApp/Dockerfile -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.vars.outputs.name }}:${{ steps.vars.outputs.tag }}
 
     - name: Push Docker image to ACR
       run: |
-        docker push ${{ steps.vars.outputs.repo }}/${{ steps.vars.outputs.name }}:${{ steps.vars.outputs.tag }}
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ steps.vars.outputs.name }}:${{ steps.vars.outputs.tag }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -56,7 +53,7 @@ jobs:
 
     - name: Replace image placeholders in deployment file
       run: |
-        sed -e "s|__DOCKER_REPOSITORY__|${{ needs.build.outputs.repo }}|" \
+        sed -e "s|__DOCKER_REPOSITORY__|${{ secrets.ACR_LOGIN_SERVER }}|" \
             -e "s|__IMAGE_NAME__|${{ needs.build.outputs.name }}|" \
             -e "s|__IMAGE_TAG__|${{ needs.build.outputs.tag }}|" \
             kubernetes/mvc-deployment.azure.yaml > kubernetes/mvc-deployment.final.yaml
